@@ -1,0 +1,16 @@
+[package]
+name = "user-authentication"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+actix-web = "4.3.1"
+bcrypt = "0.15.0"
+chrono = "0.4.26"
+diesel = { version = "2.1.0", features = ["postgres", "r2d2", "chrono", "uuid"] }
+dotenv = "0.15.0"
+serde = { version = "1.0.183", features = ["derive"] }
+serde_json = "1.0.104"
+uuid = { version = "1.4.1", features = ["v4", "serde"] }

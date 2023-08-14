@@ -1,6 +1,8 @@
 use derive_more::{Display, Error};
 use serde::{Deserialize, Serialize};
 
+use crate::token::Token;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UserDetail {
     pub firstname: String,
@@ -23,9 +25,9 @@ pub struct ResponseRegister {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ResponseLogin {
-    pub result: Option<UserData>,
+    // pub result: Option<UserData>,
     pub status: String,
-    pub message: String,
+    pub message: Token,
 }
 
 #[derive(Debug, Display, Error)]
@@ -34,4 +36,6 @@ pub enum CustomError {
     InvalidPassword,
     #[display(fmt = "No User found")]
     NoUserFound,
+    #[display(fmt = "Failed to generate access token")]
+    FailedToGenerateAccessToken,
 }

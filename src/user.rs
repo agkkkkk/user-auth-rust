@@ -1,20 +1,18 @@
-// use actix_web::http::Error;
 use actix_web::web::{self, Data, Json};
 use actix_web::{post, HttpResponse};
 use diesel::result::Error;
-// use std::io::Error;
 
 use bcrypt::{verify, DEFAULT_COST};
-
 use diesel::prelude::*;
+use std::env;
 // use diesel::query_dsl::methods::{FilterDsl, LimitDsl, OrderDsl, SelectDsl};
 // use diesel::query_dsl::QueryDsl;
 use diesel::{ExpressionMethods, Insertable, Queryable, RunQueryDsl};
 use serde::{Deserialize, Serialize};
 
 use super::schema::users;
-use crate::response::{ResponseLogin, ResponseRegister, UserData, UserDetail};
-use crate::{DBConnection, DBPool};
+use crate::response::{CustomError, ResponseLogin, ResponseRegister, UserData, UserDetail};
+use crate::{token, DBConnection, DBPool};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct User {
@@ -89,7 +87,11 @@ pub fn create_user(userdb: UserDB, conn: &mut DBConnection) -> Result<ResponseRe
     })
 }
 
-pub fn login_user(user: LoginUser, conn: &mut DBConnection) -> Result<ResponseLogin, Error> {
+pub fn authenticate_user(user: &LoginUser, user_with_password: LoginUser) -> bool {
+    verify(&user.password, &user_with_password.password).unwrap()
+}
+
+pub fn login_user(user: LoginUser, conn: &mut DBConnection) -> Result<ResponseLogin, CustomError> {
     use crate::schema::users::dsl::*;
 
     let user_with_password = match users
@@ -103,31 +105,36 @@ pub fn login_user(user: LoginUser, conn: &mut DBConnection) -> Result<ResponseLo
 
     println!("{:?}", user_with_password);
 
-    if !verify(user.password, &user_with_password.unwrap().password).unwrap() {
-        return Err(Error::NotFound);
+    let auth = authenticate_user(&user, user_with_password.unwrap());
+
+    if !auth {
+        return Err(CustomError::InvalidPassword);
     }
 
-    let user_data = match users
-        .filter(&email.eq(&user.email))
-        .select((firstname, lastname, dateofbirth, email, password))
-        .first::<UserDB>(conn)
-    {
-        Ok(res) => Ok(res),
-        Err(_) => Err(Error::NotFound),
+    let ttl = env::var("ACCESS_TOKEN_MAXAGE").expect("FAILED to fetch value");
+    let ttl = ttl.parse::<i64>().unwrap();
+    let private_key = env::var("ACCESS_TOKEN_PRIVATE_KEY").expect("FAILED to fetch value");
+
+    let access_token = match token::generate_jwt_token(user.email, ttl, private_key) {
+        Ok(access_token) => access_token,
+        Err(_) => return Err(CustomError::FailedToGenerateAccessToken),
     };
 
+    // let user_data = match users
+    //     .filter(&email.eq(&user.email))
+    //     .select((firstname, lastname, dateofbirth, email, password))
+    //     .first::<UserDB>(conn)
+    // {
+    //     Ok(res) => Ok(res),
+    //     Err(_) => Err(Error::NotFound),
+    // };
+
     Ok(ResponseLogin {
-        result: Some(UserData {
-            userdata: user_data.unwrap().to_user_details(),
-            // UserDetail {
-            //     firstname: "".to_string(),
-            //     lastname: "".to_string(),
-            //     dateofbirth: "".to_string(),
-            //     email: "".to_string(),
-            // },
-        }),
+        // result: Some(UserData {
+        //     userdata: user_data.unwrap().to_user_details(),
+        // }),
         status: "SUCCESS".to_string(),
-        message: "Login Successful".to_string(),
+        message: access_token,
     })
 }
 
@@ -154,10 +161,10 @@ async fn login(data: Json<LoginUser>, pool: Data<DBPool>) -> HttpResponse {
     let login_data = serde_json::from_str(&temp_data).unwrap();
 
     let user = web::block(move || login_user(login_data, &mut conn)).await;
-    // let res = user.unwrap().unwrap();
-    println!("{:?}", user);
+
     match user {
         Ok(res) => HttpResponse::Ok().json(res.unwrap()),
-        Err(err) => HttpResponse::NotFound().json(format!("{}", err)),
+        Err(err) => HttpResponse::BadRequest()
+            .json(serde_json::json!({"status": "FAILED", "message": format!("{:?}", err)})),
     }
 }

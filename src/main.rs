@@ -29,19 +29,9 @@ async fn main() -> Result<()> {
         App::new()
             .app_data(Data::new(pool.clone()))
             .service(user::register)
-            // .service(user::login)
+            .service(user::login)
     })
     .bind(("127.0.0.1", 8000))?
     .run()
     .await
 }
-
-// use bcrypt::{hash, verify, DEFAULT_COST};
-
-// fn main() {
-//     let hashed = hash("hunter2", DEFAULT_COST).unwrap();
-//     println!("{}", hashed);
-//     let valid = verify("hunter2", "$2b$12$AvDSyhKVaG6cff5pdf.gk.xYhEw2jeUvieYB6iFEgTUiJmVPFZspe").unwrap();
-
-//     println!("{}", valid);
-// }

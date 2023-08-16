@@ -1,9 +1,8 @@
 use derive_more::{Display, Error};
 use serde::{Deserialize, Serialize};
+use diesel::Queryable; 
 
-use crate::token::Token;
-
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Queryable)]
 pub struct UserDetail {
     pub firstname: String,
     pub lastname: Option<String>,
@@ -27,7 +26,7 @@ pub struct ResponseRegister {
 pub struct ResponseLogin {
     // pub result: Option<UserData>,
     pub status: String,
-    pub message: Token,
+    pub message: String,
 }
 
 #[derive(Debug, Display, Error)]

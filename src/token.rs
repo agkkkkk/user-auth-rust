@@ -8,14 +8,14 @@ pub struct Token {
     pub token: Option<String>,
     pub token_uuid: Uuid,
     pub user_id: String,
-    pub expires_in: Option<i64>,
+    pub exp: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TokenClaims {
     pub token_uuid: String,
     pub user_id: String,
-    pub expires_in: i64,
+    pub exp: i64,
     pub iat: i64,
     pub nbf: i64,
 }
@@ -24,7 +24,7 @@ pub fn generate_jwt_token(
     user_id: String,
     ttl: i64,
     private_key: String,
-) -> Result<Token, jsonwebtoken::errors::Error> {
+) -> Result<String, jsonwebtoken::errors::Error> {
     let bytes_private_key = general_purpose::STANDARD.decode(private_key).unwrap();
     let decoded_private_key = String::from_utf8(bytes_private_key).unwrap();
 
@@ -33,14 +33,14 @@ pub fn generate_jwt_token(
     let mut token_details = Token {
         user_id: user_id,
         token_uuid: Uuid::new_v4(),
-        expires_in: Some((now + chrono::Duration::minutes(ttl)).timestamp()),
+        exp: Some((now + chrono::Duration::minutes(ttl)).timestamp()),
         token: None,
     };
 
     let token_claims = TokenClaims {
         token_uuid: token_details.token_uuid.to_string(),
         user_id: token_details.user_id.to_string(),
-        expires_in: token_details.expires_in.unwrap(),
+        exp: token_details.exp.unwrap(),
         iat: now.timestamp(),
         nbf: now.timestamp(),
     };
@@ -52,9 +52,9 @@ pub fn generate_jwt_token(
         &jsonwebtoken::EncodingKey::from_rsa_pem(decoded_private_key.as_bytes())?,
     )?;
 
-    token_details.token = Some(token);
+    // token_details.token = Some(token);
 
-    Ok(token_details)
+    Ok(token)
 }
 
 pub fn verify_jwt(public_key: String, token: &str) -> Result<Token, jsonwebtoken::errors::Error> {
@@ -68,14 +68,15 @@ pub fn verify_jwt(public_key: String, token: &str) -> Result<Token, jsonwebtoken
         &jsonwebtoken::DecodingKey::from_rsa_pem(decoded_public_key.as_bytes()).unwrap(),
         &validation,
     )?;
+    println!("{:?}", decoded_token.claims.user_id.as_str());
 
-    let user_id = Uuid::parse_str(decoded_token.claims.user_id.as_str()).unwrap();
+    let user_id = decoded_token.claims.user_id;
     let token_uuid = Uuid::parse_str(decoded_token.claims.token_uuid.as_str()).unwrap();
 
     Ok(Token {
         token: None,
         token_uuid: token_uuid,
         user_id: user_id.to_string(),
-        expires_in: None,
+        exp: None,
     })
 }

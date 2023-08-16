@@ -4,6 +4,7 @@ use actix_web::{
 };
 use core::fmt;
 use serde::{Deserialize, Serialize};
+use std::env;
 use std::future::{ready, Ready};
 use uuid::Uuid;
 
@@ -31,7 +32,10 @@ impl FromRequest for JwtMiddleware {
     type Error = ActixWebError;
     type Future = Ready<Result<Self, Self::Error>>;
     fn from_request(req: &HttpRequest, payload: &mut Payload) -> Self::Future {
-        let data = req.app_data::<web::Data<AppState>>().unwrap();
+        // let data = req.app_data::<web::Data<AppState>>().unwrap();
+
+        let public_key =
+            env::var("ACCESS_TOKEN_PUBLIC_KEY").expect("Access token public key not fetched");
 
         let access_token = req
             .cookie("access_token")
@@ -50,10 +54,7 @@ impl FromRequest for JwtMiddleware {
             return ready(Err(ErrorUnauthorized(json_error)));
         }
 
-        let access_token_details = match token::verify_jwt(
-            data.config.access_token_public_key.to_owned(),
-            &access_token.unwrap(),
-        ) {
+        let access_token_details = match token::verify_jwt(public_key, &access_token.unwrap()) {
             Ok(token_details) => token_details,
             Err(e) => {
                 let json_error = ErrorResponse {
@@ -64,11 +65,12 @@ impl FromRequest for JwtMiddleware {
             }
         };
 
+        let user_id = access_token_details.user_id;
         let access_token_uuid =
             Uuid::parse_str(&access_token_details.token_uuid.to_string()).unwrap();
 
         ready(Ok(JwtMiddleware {
-            user: "user_id".to_string(),
+            user: user_id,
             access_token: access_token_uuid,
         }))
     }

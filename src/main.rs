@@ -8,7 +8,7 @@ use std::env;
 use std::io::Result;
 
 // mod config;
-// mod jwt_auth;
+mod jwt_auth;
 mod model;
 mod response;
 mod schema;
@@ -43,6 +43,7 @@ async fn main() -> Result<()> {
             .app_data(Data::new(pool.clone()))
             .service(user::register)
             .service(user::login)
+            .service(user::dashboard)
     })
     .bind(("127.0.0.1", 8000))?
     .run()

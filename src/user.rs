@@ -1,18 +1,19 @@
 use actix_web::web::{self, Data, Json};
-use actix_web::{post, HttpResponse};
+use actix_web::{get, post, HttpResponse};
 use diesel::result::Error;
 
 use bcrypt::{verify, DEFAULT_COST};
 use diesel::prelude::*;
-use std::env;
-// use diesel::query_dsl::methods::{FilterDsl, LimitDsl, OrderDsl, SelectDsl};
-// use diesel::query_dsl::QueryDsl;
 use diesel::{ExpressionMethods, Insertable, Queryable, RunQueryDsl};
 use serde::{Deserialize, Serialize};
+use std::env;
+use uuid::Uuid;
 
 use super::schema::users;
+use crate::jwt_auth::JwtMiddleware;
 use crate::response::{CustomError, ResponseLogin, ResponseRegister, UserData, UserDetail};
 use crate::{token, DBConnection, DBPool};
+use std::str::FromStr;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct User {
@@ -26,7 +27,6 @@ pub struct User {
 impl User {
     pub fn to_db_user(&self) -> UserDB {
         let hashed_password = bcrypt::hash(self.password.clone(), DEFAULT_COST).unwrap();
-
         UserDB {
             firstname: self.firstname.clone(),
             lastname: self.lastname.clone(),
@@ -120,22 +120,25 @@ pub fn login_user(user: LoginUser, conn: &mut DBConnection) -> Result<ResponseLo
         Err(_) => return Err(CustomError::FailedToGenerateAccessToken),
     };
 
-    // let user_data = match users
-    //     .filter(&email.eq(&user.email))
-    //     .select((firstname, lastname, dateofbirth, email, password))
-    //     .first::<UserDB>(conn)
-    // {
-    //     Ok(res) => Ok(res),
-    //     Err(_) => Err(Error::NotFound),
-    // };
-
     Ok(ResponseLogin {
-        // result: Some(UserData {
-        //     userdata: user_data.unwrap().to_user_details(),
-        // }),
         status: "SUCCESS".to_string(),
         message: access_token,
     })
+}
+
+pub fn get_user_data(user_email: String, conn: &mut DBConnection) -> Result<UserDetail, CustomError> {
+    use crate::schema::users::dsl::*;
+
+    let user_details = match users
+        .filter(&email.eq(user_email))
+        .select((firstname, lastname, dateofbirth, email))
+        .first::<UserDetail>(conn)
+    {
+        Ok(res) => Ok(res),
+        Err(_) => Err(CustomError::NoUserFound),
+    };
+
+    user_details
 }
 
 #[post("/user/register")]
@@ -167,4 +170,15 @@ async fn login(data: Json<LoginUser>, pool: Data<DBPool>) -> HttpResponse {
         Err(err) => HttpResponse::BadRequest()
             .json(serde_json::json!({"status": "FAILED", "message": format!("{:?}", err)})),
     }
+}
+
+#[get("/dashboard")]
+async fn dashboard(token: JwtMiddleware, pool: Data<DBPool>) -> HttpResponse {
+    let mut conn = pool.get().expect("Cannot create connection");
+
+    println!("TOKEN {:?}", token);
+
+    let user = get_user_data(token.user, &mut conn);
+
+    HttpResponse::Ok().json(user.unwrap())
 }

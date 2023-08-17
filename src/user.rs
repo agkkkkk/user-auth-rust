@@ -1,6 +1,7 @@
 use actix_web::web::{self, Data, Json};
 use actix_web::{get, post, HttpResponse};
-use diesel::result::Error;
+use chrono::format;
+use diesel::result::Error::{self, NotFound};
 
 use bcrypt::{verify, DEFAULT_COST};
 use diesel::prelude::*;
@@ -82,13 +83,37 @@ pub fn create_user(user: User, conn: &mut DBConnection) -> StatusResponse {
         };
     };
 
-    let userdb = user.to_db_user();
-    let _ = diesel::insert_into(users).values(&userdb).execute(conn);
-
-    StatusResponse {
-        status: "SUCCESS".to_string(),
-        message: "User successfully registered".to_string(),
-    }
+    let _ = match users.filter(email.eq(&user.email)).first::<UserDB>(conn) {
+        Ok(_) => {
+            return StatusResponse {
+                status: "FAILED".to_string(),
+                message: "User with similar email found".to_string(),
+            };
+        }
+        Err(NotFound) => {
+            let userdb = user.to_db_user();
+            match diesel::insert_into(users).values(&userdb).execute(conn) {
+                Ok(res) => {
+                    return StatusResponse {
+                        status: "SUCCESS".to_string(),
+                        message: "User successfully registered".to_string(),
+                    }
+                }
+                Err(e) => {
+                    return StatusResponse {
+                        status: "FAILED".to_string(),
+                        message: format!("Failed to insert into table, {}", e),
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            return StatusResponse {
+                status: "FAILED".to_string(),
+                message: format!("Error while fetching existing database , {}", e),
+            }
+        }
+    };
 }
 
 pub fn authenticate_user(user: &LoginUser, user_with_password: LoginUser) -> bool {

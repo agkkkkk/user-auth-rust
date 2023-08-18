@@ -1,5 +1,5 @@
 use actix_web::{
-    dev::Payload, error::ErrorUnauthorized, http, web, Error as ActixWebError, FromRequest,
+    dev::Payload, error::ErrorUnauthorized, http, Error as ActixWebError, FromRequest,
     HttpRequest,
 };
 use core::fmt;
@@ -31,7 +31,7 @@ pub struct JwtMiddleware {
 impl FromRequest for JwtMiddleware {
     type Error = ActixWebError;
     type Future = Ready<Result<Self, Self::Error>>;
-    fn from_request(req: &HttpRequest, payload: &mut Payload) -> Self::Future {
+    fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
         // let data = req.app_data::<web::Data<AppState>>().unwrap();
 
         let public_key =
@@ -45,6 +45,8 @@ impl FromRequest for JwtMiddleware {
                     .get(http::header::AUTHORIZATION)
                     .map(|h| h.to_str().unwrap().split_at(7).1.to_string())
             });
+
+        println!("{:?}", access_token);
 
         if access_token.is_none() {
             let json_error = ErrorResponse {
